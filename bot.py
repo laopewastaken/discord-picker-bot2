@@ -15,22 +15,45 @@ bot = commands.Bot(command_prefix="?", intents=intents)
 SOURCE_CHANNEL_ID = 1500337463900766238
 TARGET_CHANNEL_ID = 1500338896188346398
 
-# 🔵 COMMON THREADS (YOU MUST DEFINE THESE)
+
+# ─────────────────────────────
+# THREAD TIERS
+# ─────────────────────────────
+
 COMMON_THREAD_IDS = {
-    1500338030899236964,
-    1500338187833311323,
-    1500338384231465050    
+    1500338384231465050, #SAACC
+    1500338187833311323, #SAMA
+    1500338030899236964 #EMS
+}
+UNCOMMON_THREAD_IDS = {
+}
+RARE_THREAD_IDS = {
+}
+SUPER_RARE_THREAD_IDS = {
+    1500338794270822460, #SAACC Holo
+    1500338708606615664, #SAMA Holo
+    1500338580877344828 #EMS Holo
+}
+EPIC_THREAD_IDS = {
+    1510026120060473435 #%5 Sig
+}
+LEGENDARY_THREAD_IDS = {
 }
 
-# 🔴 SPECIAL THREADS
-SPECIAL_THREAD_IDS = {
-    1500338580877344828,
-    1500338187833311323,
-    1500338384231465050    
-}
 
-special_count = 0
-normal_count = 0
+
+# ─────────────────────────────
+# STATS
+# ─────────────────────────────
+
+stats_counter = {
+    "A": 0,
+    "B": 0,
+    "C": 0,
+    "D": 0,
+    "E": 0,
+    "F": 0
+}
 
 
 @bot.event
@@ -39,7 +62,7 @@ async def on_ready():
 
 
 # ─────────────────────────────
-# THREAD + MESSAGE LOADING
+# THREAD LOADER
 # ─────────────────────────────
 
 async def get_all_threads(channel):
@@ -53,35 +76,38 @@ async def get_all_threads(channel):
 
 
 async def collect_messages(channel):
-    """
-    Builds TWO pools:
-    - common messages
-    - special messages
-    """
 
     threads = await get_all_threads(channel)
 
-    common_msgs = []
-    special_msgs = []
+    pools = {
+        "A": [],
+        "B": [],
+        "C": [],
+        "D": [],
+        "E": [],
+        "F": []
+    }
 
     for thread in threads:
-
-        # ignore unrelated threads completely
-        if thread.id not in COMMON_THREAD_IDS and thread.id not in SPECIAL_THREAD_IDS:
-            continue
-
-        is_special = thread.id in SPECIAL_THREAD_IDS
 
         async for msg in thread.history(limit=100):
             if msg.author.bot:
                 continue
 
-            if is_special:
-                special_msgs.append(msg)
-            else:
-                common_msgs.append(msg)
+            if thread.id in COMMON_THREAD_IDS:
+                pools["A"].append(msg)
+            elif thread.id in UNCOMMON_THREAD_IDS:
+                pools["B"].append(msg)
+            elif thread.id in RARE_THREAD_IDS:
+                pools["C"].append(msg)
+            elif thread.id in SUPER_RARE_THREAD_IDS:
+                pools["D"].append(msg)
+            elif thread.id in EPIC_THREAD_IDS:
+                pools["E"].append(msg)
+            elif thread.id in LEGENDARY_THREAD_IDS:
+                pools["F"].append(msg)
 
-    return common_msgs, special_msgs
+    return pools
 
 
 # ─────────────────────────────
@@ -121,12 +147,33 @@ async def send_message(message, channel):
 
 
 # ─────────────────────────────
-# MAIN ROLL LOGIC
+# TIER PICKER
+# ─────────────────────────────
+
+def pick_tier():
+
+    r = random.random()
+
+    if r < 0.001:
+        return "F"  # Legendary
+    elif r < 0.010:
+        return "E"  # Epic
+    elif r < 0.040:
+        return "D"  # Super Rare
+    elif r < 0.110:
+        return "C"  # Rare
+    elif r < 0.460:
+        return "B"  # Uncommon
+    else:
+        return "A"  # Common
+
+
+# ─────────────────────────────
+# MAIN COMMAND
 # ─────────────────────────────
 
 @bot.command()
 async def roll(ctx, amount: int):
-    global special_count, normal_count
 
     if amount <= 0:
         await ctx.send("Give me a number above 0.")
@@ -143,32 +190,24 @@ async def roll(ctx, amount: int):
         await ctx.send("Channel not found.")
         return
 
-    common_msgs, special_msgs = await collect_messages(source)
-
-    if not common_msgs and not special_msgs:
-        await ctx.send("No messages found.")
-        return
-
-    random.shuffle(common_msgs)
-    random.shuffle(special_msgs)
+    pools = await collect_messages(source)
 
     used = set()
     sent = 0
     attempts = 0
-    max_attempts = amount * 10
+    max_attempts = amount * 15
+
+    # ───────── NEW: recap storage ─────────
+    recap_texts = []
 
     while sent < amount and attempts < max_attempts:
         attempts += 1
 
-        # 🎯 10% special chance
-        use_special = special_msgs and random.random() < 0.10
+        tier = pick_tier()
+        pool = pools.get(tier, [])
 
-        if use_special:
-            pool = special_msgs
-            is_special = True
-        else:
-            pool = common_msgs if common_msgs else special_msgs
-            is_special = False
+        if not pool:
+            pool = pools["A"]
 
         if not pool:
             continue
@@ -182,12 +221,20 @@ async def roll(ctx, amount: int):
 
         await send_message(msg, target)
 
-        if is_special:
-            special_count += 1
-        else:
-            normal_count += 1
+        text = extract_text(msg)
+        if text:
+            recap_texts.append(text)
 
+        stats_counter[tier] += 1
         sent += 1
+
+    # ───────── FINAL RECAP MESSAGE ─────────
+    if recap_texts:
+        formatted = "; ".join(f"`{t}`" for t in recap_texts)
+
+        await target.send(
+            f"{ctx.author.mention}, your last {len(recap_texts)} rolls:\n{formatted}"
+        )
 
 
 # ─────────────────────────────
@@ -196,25 +243,28 @@ async def roll(ctx, amount: int):
 
 @bot.command()
 async def stats(ctx):
-    total = special_count + normal_count
+
+    total = sum(stats_counter.values())
 
     if total == 0:
         await ctx.send("No rolls yet.")
         return
 
     await ctx.send(
-        f"📊 **Roll Stats**\n"
-        f"Special: {special_count} ({(special_count/total)*100:.1f}%)\n"
-        f"Normal: {normal_count} ({(normal_count/total)*100:.1f}%)\n"
-        f"Total: {total}"
+        "📊 **Tier Stats**\n"
+        f"A (Common): {stats_counter['A']}\n"
+        f"B (Uncommon): {stats_counter['B']}\n"
+        f"C (Rare): {stats_counter['C']}\n"
+        f"D (Super Rare): {stats_counter['D']}\n"
+        f"E (Epic): {stats_counter['E']}\n"
+        f"F (Legendary): {stats_counter['F']}\n"
     )
 
 
 @bot.command()
 async def resetstats(ctx):
-    global special_count, normal_count
-    special_count = 0
-    normal_count = 0
+    global stats_counter
+    stats_counter = {k: 0 for k in stats_counter}
     await ctx.send("📊 Stats reset.")
 
 
