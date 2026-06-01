@@ -2,6 +2,7 @@ import discord
 import random
 from discord.ext import commands
 import os
+import time
 
 TOKEN = os.getenv("TOKEN")
 
@@ -15,6 +16,10 @@ bot = commands.Bot(command_prefix="?", intents=intents)
 SOURCE_CHANNEL_ID = 1500337463900766238
 TARGET_CHANNEL_ID = 1500338896188346398
 
+CACHE_DURATION = 3600  # 1 hour
+
+cached_pools = None
+cache_timestamp = 0
 
 # ─────────────────────────────
 # THREAD TIERS
@@ -76,6 +81,13 @@ async def get_all_threads(channel):
 
 
 async def collect_messages(channel):
+    global cached_pools, cache_timestamp
+
+    now = time.time()
+
+    # Use cache if still valid
+    if cached_pools and (now - cache_timestamp) < CACHE_DURATION:
+        return cached_pools
 
     threads = await get_all_threads(channel)
 
@@ -106,6 +118,9 @@ async def collect_messages(channel):
                 pools["E"].append(msg)
             elif thread.id in LEGENDARY_THREAD_IDS:
                 pools["F"].append(msg)
+
+    cached_pools = pools
+    cache_timestamp = now
 
     return pools
 
@@ -266,5 +281,13 @@ async def resetstats(ctx):
     stats_counter = {k: 0 for k in stats_counter}
     await ctx.send("📊 Stats reset.")
 
+@bot.command()
+async def clearcache(ctx):
+    global cached_pools, cache_timestamp
+
+    cached_pools = None
+    cache_timestamp = 0
+
+    await ctx.send("🧹 Cache cleared.")
 
 bot.run(TOKEN)
