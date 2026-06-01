@@ -169,17 +169,17 @@ def pick_tier():
 
     r = random.random()
 
-    # 3%
-    if r < 0.03:
-        return "E"
+# 2.5%
+if r < 0.025:
+    return "E"
 
-    # 9.5%
-    elif r < 0.125:
-        return "D"
+# 9.5%
+elif r < 0.120:
+    return "D"
 
-    # 87.5%
-    else:
-        return "A"
+# 88%
+else:
+    return "A"
 
 
 # ─────────────────────────────
