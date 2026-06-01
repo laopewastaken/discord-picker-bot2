@@ -158,11 +158,11 @@ def pick_tier():
     if r < 0.03:
         return "E"
 
-    # 9%
-    elif r < 0.12:
+    # 9.5%
+    elif r < 0.125:
         return "D"
 
-    # 88%
+    # 87.5%
     else:
         return "A"
 
